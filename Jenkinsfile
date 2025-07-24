@@ -134,7 +134,7 @@ pipeline {
                         yq -y --in-place '.frontend.tag = "${DOCKER_TAG}"' click-app/values.yaml
                         yq -y --in-place '.mongodb.tag = "${DOCKER_TAG}"' click-app/values.yaml
 
-                        # Commit and push changes
+                        # Commit and push changess
                         git config user.name "Jenkins CI"
                         git config user.email "tiendat942003@gmail.com"
                         git add click-app/values.yaml
