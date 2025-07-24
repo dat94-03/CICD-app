@@ -132,6 +132,7 @@ pipeline {
                         # Update Helm values.yaml with new image tags
                         yq -y --in-place '.backend.tag = "${DOCKER_TAG}"' click-app/values.yaml
                         yq -y --in-place '.frontend.tag = "${DOCKER_TAG}"' click-app/values.yaml
+                        yq -y --in-place '.mongodb.tag = "${DOCKER_TAG}"' click-app/values.yaml
 
                         # Commit and push changes
                         git config user.name "Jenkins CI"
