@@ -8,11 +8,10 @@ pipeline {
 
     environment {
         SCANNER_HOME = tool 'sonar-scanner'
-        BACKEND_IMAGE = 'tiendatdev94/netflix-backend'
-        FRONTEND_IMAGE = 'tiendatdev94/netflix-frontend'
-        DB_IMAGE = 'tiendatdev94/netflix-db'
-        DOCKER_TAG = 'latest'
-        TMDB_API_KEY = 'Aj7ay86fe14eca3e76869b92'
+        BACKEND_IMAGE = 'tiendatdev94/click-app-backend'
+        FRONTEND_IMAGE = 'tiendatdev94/click-app-frontend'
+        DB_IMAGE = 'tiendatdev94/click-app-db'
+        DOCKER_TAG = "${env.BUILD_NUMBER}"
     }
 
     stages {
@@ -34,8 +33,8 @@ pipeline {
                     sh '''
                         echo "Running Sonar Scanner..."
                         $SCANNER_HOME/bin/sonar-scanner \
-                        -Dsonar.projectName=Netflix \
-                        -Dsonar.projectKey=Netflix
+                        -Dsonar.projectName=Clickapp \
+                        -Dsonar.projectKey=Clickapp
                     '''
                 }
             }
@@ -44,7 +43,7 @@ pipeline {
         // stage('Quality Gate') {
         //     steps {
         //         script {
-        //             def qg = waitForQualityGate(abortPipeline: false, credentialsId: 'Sonar-token')
+        //             def qg = waitForQualityGate(abortPipeline: true, credentialsId: 'Sonar-token')
         //             if (qg.status != 'OK') {
         //                 error "Sonar Quality Gate failed: ${qg.status}"
         //             }
@@ -67,7 +66,7 @@ pipeline {
             steps {
                 sh '''
                     echo "Running Trivy FS scan..."
-                    trivy fs . > trivyfs.txt || echo "Trivy FS scan failed or not installed"
+                    trivy fs . > trivyfs.txt
                 '''
             }
         }
@@ -89,7 +88,7 @@ pipeline {
                         dir('frontend') {
                             sh '''
                                 echo "Building frontend Docker image..."
-                                docker build --build-arg TMDB_V3_API_KEY=${TMDB_API_KEY} -t ${FRONTEND_IMAGE}:${DOCKER_TAG} .
+                                docker build -t ${FRONTEND_IMAGE}:${DOCKER_TAG} .
                                 echo "Pushing frontend Docker image..."
                                 docker push ${FRONTEND_IMAGE}:${DOCKER_TAG}
                             '''

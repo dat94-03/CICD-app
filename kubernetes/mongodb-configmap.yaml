@@ -24,3 +24,13 @@ data:
       count: 0,
       lastUpdated: new Date()
     }); 
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mongodb-secret
+type: Opaque
+data:
+  MONGODB_USER: dGllbmRhdA==       
+  MONGODB_PASSWORD: ZGF0MTIz         
