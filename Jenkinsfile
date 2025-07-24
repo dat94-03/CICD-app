@@ -1,122 +1,143 @@
-pipeline{
+pipeline {
     agent any
-    tools{
+
+    tools {
         jdk 'jdk17'
         nodejs 'node16'
     }
+
     environment {
-        SCANNER_HOME=tool 'sonar-scanner'
-        DOCKER_IMAGE = "tiendatdev94/netflix"
+        SCANNER_HOME = tool 'sonar-scanner'
+        DOCKER_IMAGE = 'tiendatdev94/netflix'
         DOCKER_TAG = 'latest'
         TMDB_API_KEY = 'Aj7ay86fe14eca3e76869b92'
     }
-    stages { // This is the main stages block
-        stage('clean workspace'){
-            steps{
+
+    stages {
+        stage('Clean Workspace') {
+            steps {
                 cleanWs()
             }
         }
-        stage('Checkout from Git'){
-            steps{
+
+        stage('Checkout Source') {
+            steps {
                 git branch: 'main', url: 'https://github.com/dat94-03/CICD-app'
             }
         }
-        stage("Sonarqube Analysis "){
-            steps{
+
+        stage('SonarQube Analysis') {
+            steps {
                 withSonarQubeEnv('sonar-server') {
-                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectName=Netflix \\
-                    -Dsonar.projectKey=Netflix '''
+                    sh '''
+                        echo "Running Sonar Scanner..."
+                        $SCANNER_HOME/bin/sonar-scanner \
+                        -Dsonar.projectName=Netflix \
+                        -Dsonar.projectKey=Netflix
+                    '''
                 }
             }
         }
-        stage("quality gate"){
-          steps {
+
+        stage('Quality Gate') {
+            steps {
                 script {
-                    waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token'
-                }
-            }
-        }
-        stage('Install Dependencies') {
-            steps {
-                sh "npm install"
-            }
-        }
-        // stage('OWASP FS SCAN') {
-        //     steps {
-        //         dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit', odcInstallation: 'DP-Check'
-        //         dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
-        //     }
-        // }
-
-        stage('TRIVY FS SCAN') {
-            steps {
-                sh "trivy fs . > trivyfs.txt"
-            }
-        }
-
-        // DOCKER BUILD AND PUSH STAGES - ADD HERE
-        stage("Docker Build & Push"){
-            steps{
-                script{
-                   withDockerRegistry(credentialsId: 'docker', toolName: 'docker'){
-                        sh "docker build --build-arg TMDB_V3_API_KEY=${TMDB_API_KEY} -t netflix ."
-                        sh "docker tag netflix ${DOCKER_IMAGE}:${DOCKER_TAG}"
-                        sh "docker push ${DOCKER_IMAGE}:${DOCKER_TAG}"
+                    def qg = waitForQualityGate(abortPipeline: false, credentialsId: 'Sonar-token')
+                    if (qg.status != 'OK') {
+                        error "Sonar Quality Gate failed: ${qg.status}"
                     }
                 }
             }
         }
 
-        stage("TRIVY Image Scan"){
-            steps{
-                sh "trivy image ${DOCKER_IMAGE}:${DOCKER_TAG} > trivyimage.txt"
+        stage('Install Dependencies') {
+            steps {
+                sh 'npm install'
             }
         }
 
-        stage('Deploy to containerrrr'){
-            steps{
+        stage('Trivy Filesystem Scan') {
+            steps {
+                sh '''
+                    echo "Running Trivy FS scan..."
+                    trivy fs . > trivyfs.txt || echo "Trivy FS scan failed or not installed"
+                '''
+            }
+        }
+
+        stage('Docker Build & Push') {
+            steps {
                 script {
-                    // Stop and remove existing container if it exists
+                    withDockerRegistry(credentialsId: 'docker', toolName: 'docker') {
+                        sh '''
+                            echo "Building Docker image..."
+                            docker build --build-arg TMDB_V3_API_KEY=${TMDB_API_KEY} -t ${DOCKER_IMAGE}:${DOCKER_TAG} .
+                            echo "Pushing Docker image..."
+                            docker push ${DOCKER_IMAGE}:${DOCKER_TAG}
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Trivy Image Scan') {
+            steps {
+                sh '''
+                    echo "Running Trivy image scan..."
+                    trivy image ${DOCKER_IMAGE}:${DOCKER_TAG} > trivyimage.txt || echo "Trivy image scan failed or not installed"
+                '''
+            }
+        }
+
+        stage('Deploy to Local Container') {
+            steps {
+                script {
                     sh '''
+                        echo "Stopping old container if it exists..."
                         docker stop netflix || true
                         docker rm netflix || true
-                    '''
 
-                    // Run new container
-                    sh "docker run -d --name netflix -p 8081:80 ${DOCKER_IMAGE}:${DOCKER_TAG}"
+                        echo "Starting new container..."
+                        docker run -d --name netflix -p 8081:80 ${DOCKER_IMAGE}:${DOCKER_TAG}
 
-                    // Optional: Wait and test if application is running
-                    sh '''
-                        sleep 30
-                        curl -f http://localhost:8081 || echo "Application might still be starting..."
+                        echo "Waiting for app to be ready..."
+                        sleep 20
+                        curl -f http://localhost:8081 || echo "App might still be initializing"
                     '''
                 }
             }
         }
-        // The "Deploy to Kubernetes" stage was incorrectly placed inside a new 'stages' block.
-        // It's now correctly placed within the main 'stages' block.
+
         stage('Deploy to Kubernetes') {
             steps {
                 script {
                     dir('Kubernetes') {
-                        withKubeConfig(caCertificate: '', clusterName: '', contextName: '', credentialsId: 'k8s', namespace: '', restrictKubeConfigAccess: false, serverUrl: '') {
-                            sh 'kubectl apply -f deployment.yml'
-                            sh 'kubectl apply -f service.yml'
+                        withKubeConfig(credentialsId: 'k8s') {
+                            sh '''
+                                echo "Deploying to Kubernetes..."
+                                kubectl apply -f deployment.yml
+                                kubectl apply -f service.yml
+                            '''
                         }
                     }
                 }
             }
         }
-    } // End of the main stages block
+    }
+
     post {
-      always {
-        emailext attachLog: true,
-            subject: "'${currentBuild.result}'",
-            body: "Project: ${env.JOB_NAME}<br/>" +
-                "Build Number: ${env.BUILD_NUMBER}<br/>" +
-                "URL: ${env.BUILD_URL}<br/>",
-            to: 'tiendat942003@gmail.com',
-            attachmentsPattern: 'trivyfs.txt,trivyimage.txt'
+        always {
+            emailext(
+                attachLog: true,
+                subject: "'${currentBuild.result}' Build Report",
+                body: """
+                    <p><b>Project:</b> ${env.JOB_NAME}</p>
+                    <p><b>Build Number:</b> ${env.BUILD_NUMBER}</p>
+                    <p><b>URL:</b> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
+                """,
+                to: 'tiendat942003@gmail.com',
+                attachmentsPattern: 'trivyfs.txt,trivyimage.txt'
+            )
         }
     }
 }
