@@ -124,10 +124,9 @@ pipeline {
                     withCredentials([usernamePassword(credentialsId: 'git-cre', 
                                 usernameVariable: 'GIT_USERNAME', 
                                 passwordVariable: 'GIT_PASSWORD')]) {
-                        
-                        sh '''
+                        sh """
                         GIT_URL="https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/dat94-03/gitops-click-app"
-                        git clone "$GIT_URL"
+                        git clone "\$GIT_URL"
                         cd gitops-click-app
 
                         # Update Helm values.yaml with new image tags
@@ -140,7 +139,8 @@ pipeline {
                         git add click-app/values.yaml
                         git commit -m "🚀 Deploy to production: build ${BUILD_NUMBER}"
                         git push origin main
-                        '''
+                    """
+
                     }
                 }
             }
