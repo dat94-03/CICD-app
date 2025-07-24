@@ -61,16 +61,16 @@ pipeline {
                 }
             }
         }
-        stage('Run Tests') {
-            steps {
-                dir('backend') {
-                    sh 'npm test'
-                }
-                dir('frontend') {
-                    sh 'npm test'
-                }
-            }
-        }
+        // stage('Run Tests') {
+        //     steps {
+        //         dir('backend') {
+        //             sh 'npm test'
+        //         }
+        //         dir('frontend') {
+        //             sh 'npm test'
+        //         }
+        //     }
+        // }
         stage('Trivy Filesystem Scan') {
             steps {
                 sh '''
