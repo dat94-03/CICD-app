@@ -125,22 +125,22 @@ pipeline {
                                 usernameVariable: 'GIT_USERNAME', 
                                 passwordVariable: 'GIT_PASSWORD')]) {
                         
-                        sh """
-                            # Clone GitOps repository
-                            git clone https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/dat94-03/gitops-click-app
-                            cd gitops-click-app
+                        sh '''
+                        GIT_URL="https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/dat94-03/gitops-click-app"
+                        git clone "$GIT_URL"
+                        cd gitops-click-app
 
-                            # Update Helm values.yaml with new image tags
-                            yq e '.backend.tag = \"${DOCKER_TAG}\"' -i click-app/values.yaml
-                            yq e '.frontend.tag = \"${DOCKER_TAG}\"' -i click-app/values.yaml
+                        # Update Helm values.yaml with new image tags
+                        yq -y --in-place '.backend.tag = "${DOCKER_TAG}"' click-app/values.yaml
+                        yq -y --in-place '.frontend.tag = "${DOCKER_TAG}"' click-app/values.yaml
 
-                            # Commit and push changes
-                            git config user.name "Jenkins CI"
-                            git config user.email "tiendat942003@gmail.com"
-                            git add click-app/values.yaml
-                            git commit -m "🚀 Deploy to production: build ${BUILD_NUMBER}"
-                            git push origin main
-                        """
+                        # Commit and push changes
+                        git config user.name "Jenkins CI"
+                        git config user.email "tiendat942003@gmail.com"
+                        git add click-app/values.yaml
+                        git commit -m "🚀 Deploy to production: build ${BUILD_NUMBER}"
+                        git push origin main
+                        '''
                     }
                 }
             }
