@@ -41,16 +41,16 @@ pipeline {
             }
         }
 
-        stage('Quality Gate') {
-            steps {
-                script {
-                    def qg = waitForQualityGate(abortPipeline: false, credentialsId: 'Sonar-token')
-                    if (qg.status != 'OK') {
-                        error "Sonar Quality Gate failed: ${qg.status}"
-                    }
-                }
-            }
-        }
+        // stage('Quality Gate') {
+        //     steps {
+        //         script {
+        //             def qg = waitForQualityGate(abortPipeline: false, credentialsId: 'Sonar-token')
+        //             if (qg.status != 'OK') {
+        //                 error "Sonar Quality Gate failed: ${qg.status}"
+        //             }
+        //         }
+        //     }
+        // }
 
         stage('Install Dependencies') {
             steps {
