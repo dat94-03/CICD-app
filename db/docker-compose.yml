@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  mongodb:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=clickcounter
+      - MONGO_INITDB_ROOT_USERNAME=tiendat
+      - MONGO_INITDB_ROOT_PASSWORD=dat123
+
+volumes:
+  mongodb_data: 

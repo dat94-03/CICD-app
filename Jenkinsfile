@@ -8,7 +8,9 @@ pipeline {
 
     environment {
         SCANNER_HOME = tool 'sonar-scanner'
-        DOCKER_IMAGE = 'tiendatdev94/netflix'
+        BACKEND_IMAGE = 'tiendatdev94/netflix-backend'
+        FRONTEND_IMAGE = 'tiendatdev94/netflix-frontend'
+        DB_IMAGE = 'tiendatdev94/netflix-db'
         DOCKER_TAG = 'latest'
         TMDB_API_KEY = 'Aj7ay86fe14eca3e76869b92'
     }
@@ -52,7 +54,12 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                sh 'npm install'
+                dir('backend') {
+                    sh 'npm install'
+                }
+                dir('frontend') {
+                    sh 'npm install'
+                }
             }
         }
 
@@ -69,12 +76,33 @@ pipeline {
             steps {
                 script {
                     withDockerRegistry(credentialsId: 'docker', toolName: 'docker') {
-                        sh '''
-                            echo "Building Docker image..."
-                            docker build --build-arg TMDB_V3_API_KEY=${TMDB_API_KEY} -t ${DOCKER_IMAGE}:${DOCKER_TAG} .
-                            echo "Pushing Docker image..."
-                            docker push ${DOCKER_IMAGE}:${DOCKER_TAG}
-                        '''
+                        // Backend
+                        dir('backend') {
+                            sh '''
+                                echo "Building backend Docker image..."
+                                docker build -t ${BACKEND_IMAGE}:${DOCKER_TAG} .
+                                echo "Pushing backend Docker image..."
+                                docker push ${BACKEND_IMAGE}:${DOCKER_TAG}
+                            '''
+                        }
+                        // Frontend
+                        dir('frontend') {
+                            sh '''
+                                echo "Building frontend Docker image..."
+                                docker build --build-arg TMDB_V3_API_KEY=${TMDB_API_KEY} -t ${FRONTEND_IMAGE}:${DOCKER_TAG} .
+                                echo "Pushing frontend Docker image..."
+                                docker push ${FRONTEND_IMAGE}:${DOCKER_TAG}
+                            '''
+                        }
+                        // DB
+                        dir('db') {
+                            sh '''
+                                echo "Building db Docker image..."
+                                docker build -t ${DB_IMAGE}:${DOCKER_TAG} .
+                                echo "Pushing db Docker image..."
+                                docker push ${DB_IMAGE}:${DOCKER_TAG}
+                            '''
+                        }
                     }
                 }
             }
@@ -83,46 +111,17 @@ pipeline {
         stage('Trivy Image Scan') {
             steps {
                 sh '''
-                    echo "Running Trivy image scan..."
-                    trivy image ${DOCKER_IMAGE}:${DOCKER_TAG} > trivyimage.txt || echo "Trivy image scan failed or not installed"
+                    echo "Running Trivy image scan for backend..."
+                    trivy image ${BACKEND_IMAGE}:${DOCKER_TAG} > trivyimage-backend.txt || echo "Trivy image scan failed or not installed"
+                    echo "Running Trivy image scan for frontend..."
+                    trivy image ${FRONTEND_IMAGE}:${DOCKER_TAG} > trivyimage-frontend.txt || echo "Trivy image scan failed or not installed"
+                    echo "Running Trivy image scan for db..."
+                    trivy image ${DB_IMAGE}:${DOCKER_TAG} > trivyimage-db.txt || echo "Trivy image scan failed or not installed"
                 '''
             }
         }
 
-        stage('Deploy to Local Container') {
-            steps {
-                script {
-                    sh '''
-                        echo "Stopping old container if it exists..."
-                        docker stop netflix || true
-                        docker rm netflix || true
-
-                        echo "Starting new container..."
-                        docker run -d --name netflix -p 8081:80 ${DOCKER_IMAGE}:${DOCKER_TAG}
-
-                        echo "Waiting for app to be ready..."
-                        sleep 20
-                        curl -f http://localhost:8081 || echo "App might still be initializing"
-                    '''
-                }
-            }
-        }
-
-        stage('Deploy to Kubernetes') {
-            steps {
-                script {
-                    dir('Kubernetes') {
-                        withKubeConfig(credentialsId: 'k8s') {
-                            sh '''
-                                echo "Deploying to Kubernetes..."
-                                kubectl apply -f deployment.yml
-                                kubectl apply -f service.yml
-                            '''
-                        }
-                    }
-                }
-            }
-        }
+        // You may want to update the deploy stages to use the new images as needed
     }
 
     post {
@@ -136,7 +135,7 @@ pipeline {
                     <p><b>URL:</b> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
                 """,
                 to: 'tiendat942003@gmail.com',
-                attachmentsPattern: 'trivyfs.txt,trivyimage.txt'
+                attachmentsPattern: 'trivyfs.txt,trivyimage-backend.txt,trivyimage-frontend.txt,trivyimage-db.txt'
             )
         }
     }
