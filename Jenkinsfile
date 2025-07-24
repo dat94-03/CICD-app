@@ -119,9 +119,6 @@ pipeline {
         }
 
         stage('Deploy to Production') {
-            when {
-                branch 'main'
-            }
             steps {
                 script {
                     withCredentials([usernamePassword(credentialsId: 'git-cre', 
