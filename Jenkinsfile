@@ -43,7 +43,7 @@ pipeline {
         // stage('Quality Gate') {
         //     steps {
         //         script {
-        //             def qg = waitForQualityGate(abortPipeline: true, credentialsId: 'Sonar-token')
+        //             def qg = waitForQualityGate()
         //             if (qg.status != 'OK') {
         //                 error "Sonar Quality Gate failed: ${qg.status}"
         //             }
@@ -61,12 +61,23 @@ pipeline {
                 }
             }
         }
-
+        stage('Run Tests') {
+            steps {
+                dir('backend') {
+                    sh 'npm test'
+                }
+                dir('frontend') {
+                    sh 'npm test'
+                }
+            }
+        }
         stage('Trivy Filesystem Scan') {
             steps {
                 sh '''
-                    echo "Running Trivy FS scan..."
-                    trivy fs . > trivyfs.txt
+                    echo "Running Trivy FS scan on backend..."
+                    trivy fs backend > trivyfs-backend.txt
+                    echo "Running Trivy FS scan on frontend..."
+                    trivy fs frontend > trivyfs-frontend.txt
                 '''
             }
         }
@@ -75,52 +86,38 @@ pipeline {
             steps {
                 script {
                     withDockerRegistry(credentialsId: 'docker', toolName: 'docker') {
-                        // Backend
                         dir('backend') {
-                            sh '''
-                                echo "Building backend Docker image..."
+                            sh """
                                 docker build -t ${BACKEND_IMAGE}:${DOCKER_TAG} .
-                                echo "Pushing backend Docker image..."
                                 docker push ${BACKEND_IMAGE}:${DOCKER_TAG}
-                            '''
+                            """
                         }
-                        // Frontend
                         dir('frontend') {
-                            sh '''
-                                echo "Building frontend Docker image..."
+                            sh """
                                 docker build -t ${FRONTEND_IMAGE}:${DOCKER_TAG} .
-                                echo "Pushing frontend Docker image..."
                                 docker push ${FRONTEND_IMAGE}:${DOCKER_TAG}
-                            '''
+                            """
                         }
-                        // DB
                         dir('db') {
-                            sh '''
-                                echo "Building db Docker image..."
+                            sh """
                                 docker build -t ${DB_IMAGE}:${DOCKER_TAG} .
-                                echo "Pushing db Docker image..."
                                 docker push ${DB_IMAGE}:${DOCKER_TAG}
-                            '''
+                            """
                         }
                     }
                 }
             }
         }
-
         stage('Trivy Image Scan') {
             steps {
-                sh '''
-                    echo "Running Trivy image scan for backend..."
-                    trivy image ${BACKEND_IMAGE}:${DOCKER_TAG} > trivyimage-backend.txt || echo "Trivy image scan failed or not installed"
-                    echo "Running Trivy image scan for frontend..."
-                    trivy image ${FRONTEND_IMAGE}:${DOCKER_TAG} > trivyimage-frontend.txt || echo "Trivy image scan failed or not installed"
-                    echo "Running Trivy image scan for db..."
-                    trivy image ${DB_IMAGE}:${DOCKER_TAG} > trivyimage-db.txt || echo "Trivy image scan failed or not installed"
-                '''
+                sh """
+                    trivy image --severity CRITICAL,HIGH ${BACKEND_IMAGE}:${DOCKER_TAG} > trivyimage-backend.txt || exit 1
+                    trivy image --severity CRITICAL,HIGH ${FRONTEND_IMAGE}:${DOCKER_TAG} > trivyimage-frontend.txt || exit 1
+                    trivy image --severity CRITICAL,HIGH ${DB_IMAGE}:${DOCKER_TAG} > trivyimage-db.txt || exit 1
+                """
             }
         }
 
-        // You may want to update the deploy stages to use the new images as needed
     }
 
     post {
