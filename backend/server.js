@@ -76,7 +76,7 @@ app.post('/api/clicks', async (req, res) => {
 });
 
 // Health check endpoint
-app.get('health', (req, res) => {
+app.get('/health', (req, res) => {
   res.status(200).json({ status: 'healthy' });
 });
 
