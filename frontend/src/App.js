@@ -64,7 +64,7 @@ function App() {
       {lastUpdated && (
         <p className="last-click">Last clicked: {formatTimeAgo(lastUpdated)}</p>
       )}
-      <button onClick={handleClick}>Click Me!</button>
+      <button onClick={handleClick}>Click Me Bro!</button>
     </div>
   );
 }
