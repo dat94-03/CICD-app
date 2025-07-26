@@ -1,9 +1,15 @@
 FROM mongo:4.4
 
-COPY init-mongo.js /docker-entrypoint-initdb.d/
+# Use build arguments for credentials (will be provided during build)
+ARG MONGO_INITDB_ROOT_USERNAME
+ARG MONGO_INITDB_ROOT_PASSWORD
+ARG MONGO_INITDB_DATABASE
 
-ENV MONGO_INITDB_DATABASE=clickcounter
-ENV MONGO_INITDB_ROOT_USERNAME=tiendat
-ENV MONGO_INITDB_ROOT_PASSWORD=dat123
+# Set environment variables from build args
+ENV MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
+ENV MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
+ENV MONGO_INITDB_DATABASE=${MONGO_INITDB_DATABASE}
+
+COPY init-mongo.js /docker-entrypoint-initdb.d/
 
 EXPOSE 27017

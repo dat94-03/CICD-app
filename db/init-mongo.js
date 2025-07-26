@@ -1,13 +1,18 @@
-db = db.getSiblingDB('clickcounter');
+// Get database name from environment variable
+const dbName = process.env.MONGO_INITDB_DATABASE || 'clickcounter';
+const username = process.env.MONGO_INITDB_ROOT_USERNAME || 'admin';
+const password = process.env.MONGO_INITDB_ROOT_PASSWORD || 'password';
+
+db = db.getSiblingDB(dbName);
 
 // Create user for the application
 db.createUser({
-  user: 'tiendat',
-  pwd: 'dat123',
+  user: username,
+  pwd: password,
   roles: [
     {
       role: 'readWrite',
-      db: 'clickcounter'
+      db: dbName
     }
   ]
 });

@@ -12,6 +12,7 @@ pipeline {
         FRONTEND_IMAGE = 'tiendatdev94/click-app-frontend'
         DB_IMAGE = 'tiendatdev94/click-app-db'
         DOCKER_TAG = "${env.BUILD_NUMBER}"
+        NAMESPACE = 'biglab'
     }
 
     stages {
@@ -99,10 +100,21 @@ pipeline {
                             """
                         }
                         dir('db') {
-                            sh """
-                                docker build -t ${DB_IMAGE}:${DOCKER_TAG} .
-                                docker push ${DB_IMAGE}:${DOCKER_TAG}
-                            """
+                            // Use Jenkins credentials for MongoDB build
+                            withCredentials([
+                                string(credentialsId: 'mongodb-username', variable: 'MONGO_USERNAME'),
+                                string(credentialsId: 'mongodb-password', variable: 'MONGO_PASSWORD'),
+                                string(credentialsId: 'mongodb-database', variable: 'MONGO_DATABASE')
+                            ]) {
+                                sh """
+                                    docker build \
+                                        --build-arg MONGO_INITDB_ROOT_USERNAME=\${MONGO_USERNAME} \
+                                        --build-arg MONGO_INITDB_ROOT_PASSWORD=\${MONGO_PASSWORD} \
+                                        --build-arg MONGO_INITDB_DATABASE=\${MONGO_DATABASE} \
+                                        -t ${DB_IMAGE}:${DOCKER_TAG} .
+                                    docker push ${DB_IMAGE}:${DOCKER_TAG}
+                                """
+                            }
                         }
                     }
                 }
@@ -118,12 +130,35 @@ pipeline {
             }
         }
 
+        stage('Create Kubernetes Secrets') {
+            steps {
+                script {
+                    withCredentials([
+                        string(credentialsId: 'mongodb-username', variable: 'MONGO_USERNAME'),
+                        string(credentialsId: 'mongodb-password', variable: 'MONGO_PASSWORD')
+                    ]) {
+                        sh """
+                            kubectl create secret generic mongodb-secret \
+                                --from-literal=username=\${MONGO_USERNAME} \
+                                --from-literal=password=\${MONGO_PASSWORD} \
+                                -n ${NAMESPACE} \
+                                --dry-run=client -o yaml | kubectl apply -f -
+                        """
+                    }
+                }
+            }
+        }
+
         stage('Deploy to Production') {
             steps {
                 script {
-                    withCredentials([usernamePassword(credentialsId: 'git-cre', 
-                                usernameVariable: 'GIT_USERNAME', 
-                                passwordVariable: 'GIT_PASSWORD')]) {
+                    withCredentials([
+                        usernamePassword(credentialsId: 'git-cre', 
+                            usernameVariable: 'GIT_USERNAME', 
+                            passwordVariable: 'GIT_PASSWORD'),
+                        string(credentialsId: 'mongodb-username', variable: 'MONGO_USERNAME'),
+                        string(credentialsId: 'mongodb-password', variable: 'MONGO_PASSWORD')
+                    ]) {
                         sh """
                         GIT_URL="https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/dat94-03/gitops-click-app"
                         git clone "\$GIT_URL"
@@ -134,14 +169,13 @@ pipeline {
                         yq -y --in-place '.frontend.tag = "${DOCKER_TAG}"' click-app/values.yaml
                         yq -y --in-place '.mongodb.tag = "${DOCKER_TAG}"' click-app/values.yaml
 
-                        # Commit and push changess
+                        # Commit and push changes
                         git config user.name "Jenkins CI"
                         git config user.email "tiendat942003@gmail.com"
                         git add click-app/values.yaml
                         git commit -m "🚀 Deploy to production: build ${BUILD_NUMBER}"
                         git push origin main
                     """
-
                     }
                 }
             }
