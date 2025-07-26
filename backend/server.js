@@ -31,15 +31,32 @@ const Click = mongoose.model('Click', clickSchema);
 const register = new promClient.Registry();
 promClient.collectDefaultMetrics({ register });
 
-// Custom metric: total clicks
+// Custom metric: total clicks (counter)
 const clickCounter = new promClient.Counter({
   name: 'clicks_total',
-  help: 'Total number of clicks',
+  help: 'Total number of clicks (incremented per POST)',
 });
 register.registerMetric(clickCounter);
 
+// Custom metric: current click count (gauge)
+const clickGauge = new promClient.Gauge({
+  name: 'clicks_current',
+  help: 'Current click count from MongoDB',
+});
+register.registerMetric(clickGauge);
+
+// Custom metric: duration of /api/clicks requests (histogram)
+const clicksDuration = new promClient.Histogram({
+  name: 'clicks_api_duration_seconds',
+  help: 'Duration of /api/clicks requests in seconds',
+  labelNames: ['method', 'status'],
+  buckets: [0.01, 0.05, 0.1, 0.2, 0.5, 1, 2, 5]
+});
+register.registerMetric(clicksDuration);
+
 // Routes
 app.get('/api/clicks', async (req, res) => {
+  const end = clicksDuration.startTimer({ method: 'GET' });
   try {
     let clickData = await Click.findOne();
     if (!clickData) {
@@ -49,13 +66,16 @@ app.get('/api/clicks', async (req, res) => {
       count: clickData.count,
       lastUpdated: clickData.lastUpdated
     });
+    end({ status: 200 });
   } catch (error) {
+    end({ status: 500 });
     console.error('Error fetching count:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 app.post('/api/clicks', async (req, res) => {
+  const end = clicksDuration.startTimer({ method: 'POST' });
   try {
     let clickData = await Click.findOne();
     if (!clickData) {
@@ -69,7 +89,9 @@ app.post('/api/clicks', async (req, res) => {
       count: clickData.count,
       lastUpdated: clickData.lastUpdated
     });
+    end({ status: 200 });
   } catch (error) {
+    end({ status: 500 });
     console.error('Error updating count:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -82,8 +104,19 @@ app.get('/health', (req, res) => {
 
 // Expose /metrics endpoint
 app.get('/api/metrics', async (req, res) => {
-  res.set('Content-Type', register.contentType);
-  res.end(await register.metrics());
+  try {
+    // Fetch current click count from DB
+    let clickData = await Click.findOne();
+    if (clickData) {
+      clickGauge.set(clickData.count);
+    } else {
+      clickGauge.set(0);
+    }
+    res.set('Content-Type', register.contentType);
+    res.end(await register.metrics());
+  } catch (error) {
+    res.status(500).end();
+  }
 });
 
 // Start server
