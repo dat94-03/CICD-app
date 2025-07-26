@@ -146,7 +146,7 @@ pipeline {
                         git config user.name "Jenkins CI"
                         git config user.email "tiendat942003@gmail.com"
                         git add click-app/values.yaml
-                        git commit -m "🚀 Deploy to production: build ${BUILD_NUMBER} with secrets"
+                        git commit -m "🚀 Deploy to production: build ${BUILD_NUMBER}"
                         git push origin main
                     """
                     }
