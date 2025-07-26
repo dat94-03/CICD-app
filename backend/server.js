@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
+const promClient = require('prom-client');
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -25,6 +26,17 @@ const clickSchema = new mongoose.Schema({
 });
 
 const Click = mongoose.model('Click', clickSchema);
+
+// Create a Registry and default metrics
+const register = new promClient.Registry();
+promClient.collectDefaultMetrics({ register });
+
+// Custom metric: total clicks
+const clickCounter = new promClient.Counter({
+  name: 'clicks_total',
+  help: 'Total number of clicks',
+});
+register.registerMetric(clickCounter);
 
 // Routes
 app.get('/api/clicks', async (req, res) => {
@@ -52,6 +64,7 @@ app.post('/api/clicks', async (req, res) => {
     clickData.count += 1;
     clickData.lastUpdated = new Date();
     await clickData.save();
+    clickCounter.inc(); // Increment Prometheus counter
     res.json({ 
       count: clickData.count,
       lastUpdated: clickData.lastUpdated
@@ -67,7 +80,13 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'healthy' });
 });
 
+// Expose /metrics endpoint
+app.get('/metrics', async (req, res) => {
+  res.set('Content-Type', register.contentType);
+  res.end(await register.metrics());
+});
+
 // Start server
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
-}); 
+});
