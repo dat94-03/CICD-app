@@ -41,16 +41,16 @@ pipeline {
             }
         }
 
-        // stage('Quality Gate') {
-        //     steps {
-        //         script {
-        //             def qg = waitForQualityGate()
-        //             if (qg.status != 'OK') {
-        //                 error "Sonar Quality Gate failed: ${qg.status}"
-        //             }
-        //         }
-        //     }
-        // }
+        stage('Quality Gate') {
+            steps {
+                script {
+                    def qg = waitForQualityGate()
+                    if (qg.status != 'OK') {
+                        error "Sonar Quality Gate failed: ${qg.status}"
+                    }
+                }
+            }
+        }
 
         stage('Install Dependencies') {
             steps {
@@ -62,16 +62,6 @@ pipeline {
                 }
             }
         }
-        // stage('Run Tests') {
-        //     steps {
-        //         dir('backend') {
-        //             sh 'npm test'
-        //         }
-        //         dir('frontend') {
-        //             sh 'npm test'
-        //         }
-        //     }
-        // }
         stage('Trivy Filesystem Scan') {
             steps {
                 sh '''
@@ -130,26 +120,7 @@ pipeline {
             }
         }
 
-        stage('Create Kubernetes Secrets') {
-            steps {
-                script {
-                    withCredentials([
-                        string(credentialsId: 'mongodb-username', variable: 'MONGO_USERNAME'),
-                        string(credentialsId: 'mongodb-password', variable: 'MONGO_PASSWORD')
-                    ]) {
-                        sh """
-                            kubectl create secret generic mongodb-secret \
-                                --from-literal=username=\${MONGO_USERNAME} \
-                                --from-literal=password=\${MONGO_PASSWORD} \
-                                -n ${NAMESPACE} \
-                                --dry-run=client -o yaml | kubectl apply -f -
-                        """
-                    }
-                }
-            }
-        }
-
-        stage('Deploy to Production') {
+        stage('Update GitOps with Secrets') {
             steps {
                 script {
                     withCredentials([
@@ -164,16 +135,18 @@ pipeline {
                         git clone "\$GIT_URL"
                         cd gitops-click-app
 
-                        # Update Helm values.yaml with new image tags
+                        # Update Helm values.yaml with new image tags and credentials
                         yq -y --in-place '.backend.tag = "${DOCKER_TAG}"' click-app/values.yaml
                         yq -y --in-place '.frontend.tag = "${DOCKER_TAG}"' click-app/values.yaml
                         yq -y --in-place '.mongodb.tag = "${DOCKER_TAG}"' click-app/values.yaml
+                        yq -y --in-place '.mongodb.username = "${MONGO_USERNAME}"' click-app/values.yaml
+                        yq -y --in-place '.mongodb.password = "${MONGO_PASSWORD}"' click-app/values.yaml
 
                         # Commit and push changes
                         git config user.name "Jenkins CI"
                         git config user.email "tiendat942003@gmail.com"
                         git add click-app/values.yaml
-                        git commit -m "🚀 Deploy to production: build ${BUILD_NUMBER}"
+                        git commit -m "🚀 Deploy to production: build ${BUILD_NUMBER} with secrets"
                         git push origin main
                     """
                     }
@@ -183,21 +156,6 @@ pipeline {
 
     }
 
-    // post {
-    //     always {
-    //         emailext(
-    //             attachLog: true,
-    //             subject: "'${currentBuild.result}' Build Report",
-    //             body: """
-    //                 <p><b>Project:</b> ${env.JOB_NAME}</p>
-    //                 <p><b>Build Number:</b> ${env.BUILD_NUMBER}</p>
-    //                 <p><b>URL:</b> <a href="${env.BUILD_URL}">${env.BUILD_URL}</a></p>
-    //             """,
-    //             to: 'tiendat942003@gmail.com',
-    //             attachmentsPattern: 'trivyfs.txt,trivyimage-backend.txt,trivyimage-frontend.txt,trivyimage-db.txt'
-    //         )
-    //     }
-    // }
     post {
     always {
         cleanWs()
