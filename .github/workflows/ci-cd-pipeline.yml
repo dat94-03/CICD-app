@@ -1,0 +1,58 @@
+name: Application CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      # Step 2
+      - name: Setup Build Environment
+        run: |
+          echo "Installing dependencies..."
+          sleep 2
+          echo "Environment ready"
+
+      # Step 3
+      - name: Run Unit Tests
+        run: |
+          echo "Running test suite..."
+          sleep 2
+          echo "All tests passed"
+
+      # Step 4
+      - name: Static Code Analysis
+        run: |
+          echo "Scanning code for vulnerabilities..."
+          sleep 2
+          echo "No critical issues found"
+
+      # Step 5
+      - name: Build and Package Application
+        run: |
+          echo "Building application artifact..."
+          sleep 2
+          echo "Packaging artifact for deployment"
+
+      # Step 6
+      - name: Deploy to Production Environment
+        run: |
+          echo "Deploying application..."
+          sleep 2
+          echo "Deployment completed successfully"
+
+      # Step 7 (optional verification)
+      - name: Post-Deployment Health Check
+        run: |
+          echo "Checking service health..."
+          sleep 2
+          echo "Service is healthy"
